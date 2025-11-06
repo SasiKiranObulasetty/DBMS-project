@@ -27,7 +27,7 @@ export default function FacilitiesPage() {
   }
 
   return (
-    <div className="flex-1 p-8">
+    <div className="flex-1 p-9">
       {/* Header */}
       <div className="mb-8">
         <Link href="/student">
