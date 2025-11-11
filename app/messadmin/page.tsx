@@ -1,111 +1,120 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { AlertCircle, CheckCircle, Clock, Eye } from "lucide-react"
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AlertCircle, CheckCircle, Clock, Eye } from "lucide-react";
 
 interface Issue {
-  id: number
-  title: string
-  description: string
-  category: string
-  status: string
-  student_name: string
-  created_at: string
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+  student_name: string;
+  created_at: string;
 }
 
-export default function AdminDashboard() {
-  const [issues, setIssues] = useState<Issue[]>([])
+export default function MessAdminDashboard() {
+  const [issues, setIssues] = useState<Issue[]>([]);
   const [stats, setStats] = useState({
     total: 0,
     resolved: 0,
     pending: 0,
     inProgress: 0,
-  })
-  const [loading, setLoading] = useState(true)
-  const router = useRouter()
+  });
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  // ✅ Check role and redirect unauthorized users
+  // ✅ Role-based protection
   useEffect(() => {
-    const userRaw = localStorage.getItem("user")
-    let user = null
+    const userRaw = localStorage.getItem("user");
+    let user = null;
+
     try {
-      user = userRaw ? JSON.parse(userRaw) : null
+      user = userRaw ? JSON.parse(userRaw) : null;
     } catch (e) {
-      console.error("Failed to parse user:", e)
+      console.error("Failed to parse user:", e);
     }
 
-    if (!user || !["admin", "superadmin", "facilityadmin"].includes(user.role)) {
-      console.warn("⚠️ Redirecting non-admin user...")
-      router.push("/login")
+    if (
+      !user ||
+      !["messadmin", "superadmin", "facilityadmin"].includes(user.role?.toLowerCase())
+    ) {
+      console.warn("⚠️ Redirecting unauthorized user...");
+      router.replace("/login");
     }
-  }, [router])
+  }, [router]);
 
-  // ✅ Fetch issues for dashboard
+  // ✅ Fetch only Mess issues
   useEffect(() => {
     const fetchIssues = async () => {
       try {
-        const res = await fetch("/api/issues")
-        const data = await res.json()
+        const res = await fetch("/api/issues?category=mess"); // Backend filters mess issues
+        const data = await res.json();
 
-        // ✅ Normalize issues array
         const issuesData = Array.isArray(data)
           ? data
           : Array.isArray(data.issues)
           ? data.issues
-          : []
+          : [];
 
-        setIssues(issuesData)
+        const messIssues = issuesData.filter(
+          (issue) => issue.category?.toLowerCase() === "mess"
+        );
 
-        // ✅ Calculate stats
-        const resolved = issuesData.filter((i) => i.status === "resolved").length
-        const inProgress = issuesData.filter((i) => i.status === "in_progress" || i.status === "in-progress").length
-        const pending = issuesData.filter(
+        setIssues(messIssues);
+
+        // ✅ Stats calculation
+        const resolved = messIssues.filter((i) => i.status === "resolved").length;
+        const inProgress = messIssues.filter(
+          (i) => i.status === "in_progress" || i.status === "in-progress"
+        ).length;
+        const pending = messIssues.filter(
           (i) => i.status === "pending" || i.status === "raised"
-        ).length
+        ).length;
 
         setStats({
-          total: issuesData.length,
+          total: messIssues.length,
           resolved,
           inProgress,
           pending,
-        })
+        });
       } catch (error) {
-        console.error("❌ Error fetching issues:", error)
+        console.error("❌ Error fetching mess issues:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchIssues()
-  }, [])
+    fetchIssues();
+  }, []);
 
-  const recentIssues = issues.slice(0, 5)
+  const recentIssues = issues.slice(0, 5);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "resolved":
-        return <CheckCircle className="w-5 h-5 text-green-400" />
+        return <CheckCircle className="w-5 h-5 text-green-400" />;
       case "in-progress":
       case "in_progress":
-        return <Clock className="w-5 h-5 text-yellow-400" />
+        return <Clock className="w-5 h-5 text-yellow-400" />;
       case "pending":
       case "raised":
-        return <AlertCircle className="w-5 h-5 text-cyan-400" />
+        return <AlertCircle className="w-5 h-5 text-cyan-400" />;
       default:
-        return <AlertCircle className="w-5 h-5 text-gray-500" />
+        return <AlertCircle className="w-5 h-5 text-gray-500" />;
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen text-slate-400 bg-slate-900">
-        Loading admin dashboard...
+        Loading Mess Admin Dashboard...
       </div>
-    )
+    );
   }
 
   return (
@@ -113,9 +122,9 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
+          <h1 className="text-3xl font-bold text-white">Mess Admin Dashboard</h1>
           <p className="text-slate-400">
-            Manage hostel facilities and resolve student issues
+            Manage mess facilities and resolve student meal-related issues
           </p>
         </div>
       </div>
@@ -131,6 +140,7 @@ export default function AdminDashboard() {
             <AlertCircle className="w-12 h-12 text-cyan-400 opacity-30" />
           </div>
         </Card>
+
         <Card className="p-6 border border-slate-700 bg-slate-800/70">
           <div className="flex items-center justify-between">
             <div>
@@ -140,6 +150,7 @@ export default function AdminDashboard() {
             <CheckCircle className="w-12 h-12 text-green-400 opacity-30" />
           </div>
         </Card>
+
         <Card className="p-6 border border-slate-700 bg-slate-800/70">
           <div className="flex items-center justify-between">
             <div>
@@ -149,6 +160,7 @@ export default function AdminDashboard() {
             <Clock className="w-12 h-12 text-yellow-400 opacity-30" />
           </div>
         </Card>
+
         <Card className="p-6 border border-slate-700 bg-slate-800/70">
           <div className="flex items-center justify-between">
             <div>
@@ -163,8 +175,8 @@ export default function AdminDashboard() {
       {/* Recent Issues */}
       <Card className="border border-slate-700 bg-slate-800/70 p-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-white">Recent Issues</h2>
-          <Link href="/admin/raised-issues">
+          <h2 className="text-xl font-bold text-white">Recent Mess Issues</h2>
+          <Link href="/messadmin/raisedissues">
             <Button
               variant="outline"
               size="sm"
@@ -177,13 +189,13 @@ export default function AdminDashboard() {
         </div>
 
         {recentIssues.length === 0 ? (
-          <p className="text-center text-slate-400 py-6">No issues found</p>
+          <p className="text-center text-slate-400 py-6">No mess issues found</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead className="bg-slate-700/50 text-slate-300">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Issue ID</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">ID</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold">Title</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold">By</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
@@ -209,7 +221,7 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-4 py-3">
                       {issue.status !== "resolved" && (
-                        <Link href={`/admin/raised-issues?issue=${issue.id}`}>
+                        <Link href={`/messadmin/raisedissues?issue=${issue.id}`}>
                           <Button
                             size="sm"
                             variant="outline"
@@ -228,5 +240,5 @@ export default function AdminDashboard() {
         )}
       </Card>
     </div>
-  )
+  );
 }

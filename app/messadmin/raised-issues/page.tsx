@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle, Clock, AlertCircle } from "lucide-react";
 
 interface Issue {
@@ -18,7 +19,7 @@ interface Issue {
   room_number?: string;
 }
 
-export default function RaisedIssuesPage() {
+export default function MessRaisedIssuesPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
@@ -30,27 +31,49 @@ export default function RaisedIssuesPage() {
     inProgress: 0,
   });
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  // ✅ Fetch issues with format safety
+  // ✅ Role Protection
+  useEffect(() => {
+    const userRaw = localStorage.getItem("user");
+    let user = null;
+
+    try {
+      user = userRaw ? JSON.parse(userRaw) : null;
+    } catch (err) {
+      console.error("❌ Error parsing user:", err);
+    }
+
+    if (!user || !["messadmin", "superadmin"].includes(user.role?.toLowerCase())) {
+      console.warn("⚠️ Unauthorized access — redirecting to login...");
+      router.replace("/login");
+    }
+  }, [router]);
+
+  // ✅ Fetch only mess issues
   const fetchIssues = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/issues");
+      const res = await fetch("/api/issues?category=mess");
       if (!res.ok) throw new Error("Failed to fetch issues");
       const data = await res.json();
 
-      // ✅ Normalize possible response formats
+      // Normalize data
       const issuesData = Array.isArray(data)
         ? data
         : Array.isArray(data.issues)
         ? data.issues
         : [];
 
-      setIssues(issuesData);
-      calculateStats(issuesData);
+      const messIssues = issuesData.filter(
+        (i) => i.category?.toLowerCase() === "mess"
+      );
+
+      setIssues(messIssues);
+      calculateStats(messIssues);
     } catch (err) {
-      console.error("Error fetching issues:", err);
-      setIssues([]); // avoid crashes if fetch fails
+      console.error("Error fetching mess issues:", err);
+      setIssues([]);
     } finally {
       setLoading(false);
     }
@@ -113,7 +136,7 @@ export default function RaisedIssuesPage() {
     <div className="flex-1 min-h-screen bg-slate-900 text-white p-8">
       {/* Header */}
       <div className="mb-8">
-        <Link href="/admin">
+        <Link href="/messadmin">
           <Button
             variant="outline"
             size="sm"
@@ -123,8 +146,10 @@ export default function RaisedIssuesPage() {
             Back
           </Button>
         </Link>
-        <h1 className="text-3xl font-bold text-white">🚨 Raised Issues</h1>
-        <p className="text-slate-400">View and manage all student-reported issues</p>
+        <h1 className="text-3xl font-bold text-white">🍽️ Mess Raised Issues</h1>
+        <p className="text-slate-400">
+          View and resolve issues reported in the mess department
+        </p>
       </div>
 
       {/* Stats */}
@@ -139,7 +164,9 @@ export default function RaisedIssuesPage() {
         </Card>
         <Card className="p-6 border border-slate-700 bg-slate-800/70">
           <p className="text-slate-400 text-sm">In Progress</p>
-          <p className="text-3xl font-bold text-yellow-400 mt-1">{stats.inProgress}</p>
+          <p className="text-3xl font-bold text-yellow-400 mt-1">
+            {stats.inProgress}
+          </p>
         </Card>
         <Card className="p-6 border border-slate-700 bg-slate-800/70">
           <p className="text-slate-400 text-sm">Pending</p>
@@ -174,10 +201,10 @@ export default function RaisedIssuesPage() {
 
           {/* Issue Cards */}
           {loading ? (
-            <p className="text-slate-400 p-4">Loading issues...</p>
+            <p className="text-slate-400 p-4">Loading mess issues...</p>
           ) : filteredIssues.length === 0 ? (
             <Card className="p-6 text-center text-slate-400 bg-slate-800/70 border-slate-700">
-              No issues found.
+              No mess issues found.
             </Card>
           ) : (
             filteredIssues.map((issue) => (
@@ -192,13 +219,13 @@ export default function RaisedIssuesPage() {
                   <div>{getStatusIcon(issue.status)}</div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg text-white">{issue.title}</h3>
-                    <p className="text-sm text-slate-400 mb-2">{issue.description}</p>
+                    <p className="text-sm text-slate-400 mb-2">
+                      {issue.description}
+                    </p>
                     <div className="text-xs text-slate-500 flex gap-2 flex-wrap">
-                      <span>🏠 {issue.category}</span>
+                      <span>🍽️ {issue.category}</span>
                       <span>• 👤 {issue.student_name || "N/A"}</span>
-                      <span>
-                        • 🕒 {new Date(issue.created_at).toLocaleDateString()}
-                      </span>
+                      <span>• 🕒 {new Date(issue.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                   <span className="text-xs capitalize border border-slate-600 px-2 py-1 rounded text-slate-300">
@@ -220,9 +247,11 @@ export default function RaisedIssuesPage() {
               <p className="font-semibold mb-3">{selectedIssue.title}</p>
 
               <p className="text-sm text-slate-400 mb-1">Reported By</p>
-              <p className="font-semibold mb-3">{selectedIssue.student_name || "Unknown"}</p>
+              <p className="font-semibold mb-3">
+                {selectedIssue.student_name || "Unknown"}
+              </p>
 
-              <p className="text-sm text-slate-400 mb-1">Facility</p>
+              <p className="text-sm text-slate-400 mb-1">Category</p>
               <p className="font-semibold mb-3 capitalize">{selectedIssue.category}</p>
 
               <p className="text-sm text-slate-400 mb-2">Status</p>
@@ -261,7 +290,7 @@ export default function RaisedIssuesPage() {
             </Card>
           ) : (
             <Card className="p-6 text-center text-slate-400 bg-slate-800/70 border-slate-700">
-              Select an issue to view details
+              Select a mess issue to view details
             </Card>
           )}
         </div>

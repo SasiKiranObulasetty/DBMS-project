@@ -1,164 +1,208 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { createIssue, getFacilities } from "@/lib/storage"
-import { getCurrentUser } from "@/lib/auth"
-import { ArrowLeft, CheckCircle } from "lucide-react"
+import Link from "next/link"
+import { ArrowLeft, PlusCircle } from "lucide-react"
 
 export default function RaiseIssuePage() {
-  const router = useRouter()
-  const user = getCurrentUser()
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    category: "room-maintenance" as const,
-    facilityId: "",
-  })
-  const [submitted, setSubmitted] = useState(false)
+  const [facilities, setFacilities] = useState<any[]>([])
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [facilityId, setFacilityId] = useState("")
   const [loading, setLoading] = useState(false)
-  const facilities = getFacilities()
+  const [stats, setStats] = useState({ total: 0, resolved: 0, inProgress: 0, pending: 0 })
+  const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {}
 
-  const categories = [
-    { value: "room-maintenance", label: "Room Maintenance" },
-    { value: "mess-food", label: "Mess Food" },
-    { value: "internet", label: "Internet" },
-    { value: "cleaning", label: "Cleaning" },
-    { value: "medical", label: "Medical" },
-    { value: "entry-exit", label: "Entry/Exit" },
-  ]
+  // 🧠 Fetch facilities
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch("/api/facilities")
+        if (res.ok) {
+          const data = await res.json()
+          setFacilities(Array.isArray(data) ? data : data.facilities || [])
+        } else {
+          // fallback if no /api/facilities yet
+          setFacilities([
+            { id: 1, name: "Mess", status: "active" },
+            { id: 2, name: "Maintenance", status: "active" },
+            { id: 3, name: "Internet", status: "active" },
+            { id: 4, name: "Medical", status: "active" },
+            { id: 5, name: "Entry-Exit", status: "active" },
+            { id: 6, name: "Others", status: "active" },
+          ])
+        }
+      } catch {
+        setFacilities([])
+      }
+    }
+    fetchData()
+  }, [])
 
+  // 🧮 Fetch issue stats for this student
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!user?.id) {
+        console.warn("⚠️ No user found in localStorage, skipping fetchStats")
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/issues?student_id=${user.id}`)
+        if (res.ok) {
+          const data = await res.json()
+
+          // ✅ Handle both possible formats: array OR { issues: [...] }
+          const issues = Array.isArray(data)
+            ? data
+            : Array.isArray(data.issues)
+            ? data.issues
+            : []
+
+          const total = issues.length
+          const resolved = issues.filter((i) => i.status === "resolved").length
+          const inProgress = issues.filter((i) => i.status === "in_progress").length
+          const pending = total - resolved - inProgress
+          setStats({ total, resolved, inProgress, pending })
+        }
+      } catch (err) {
+        console.error("Error fetching stats:", err)
+      }
+    }
+
+    fetchStats()
+  }, [user])
+
+  // 🧾 Handle issue submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!title || !description || !facilityId) {
+      alert("⚠️ Please fill all fields before submitting.")
+      return
+    }
+
     setLoading(true)
-
     try {
-      if (!user) return
-
-      createIssue({
-        title: formData.title,
-        description: formData.description,
-        category: formData.category,
-        facilityId: formData.facilityId,
-        studentId: user.id,
-        status: "raised",
-        createdBy: user.name,
+      const response = await fetch("/api/issues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: user.id,
+          title,
+          description,
+          category: facilityId.toLowerCase().replace(" ", "_"),
+        }),
       })
 
-      setSubmitted(true)
-      setTimeout(() => {
-        router.push("/student/my-issues")
-      }, 2000)
+      if (response.ok) {
+        alert("✅ Issue raised successfully!")
+        setTitle("")
+        setDescription("")
+        setFacilityId("")
+      } else {
+        const errText = await response.text()
+        console.error("Server error:", errText)
+        alert("❌ Failed to raise issue. Please try again.")
+      }
+    } catch (err) {
+      console.error("Request failed:", err)
+      alert("❌ Server connection failed.")
     } finally {
       setLoading(false)
     }
   }
 
-  if (submitted) {
-    return (
-      <div className="flex-1 p-8 flex items-center justify-center">
-        <Card className="p-12 text-center max-w-md border-2">
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold mb-2">Issue Submitted!</h2>
-          <p className="text-muted-foreground mb-6">
-            Your issue has been successfully recorded. Our team will review it shortly.
-          </p>
-          <p className="text-sm text-muted-foreground">Redirecting to your issues...</p>
-        </Card>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex-1 p-8">
+    <div className="flex-1 p-8 max-w-5xl mx-auto text-white">
       {/* Header */}
-      <div className="mb-8">
-        <Button variant="outline" size="sm" className="gap-2 mb-4 bg-transparent" onClick={() => router.back()}>
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </Button>
-        <h1 className="text-3xl font-bold">Report an Issue</h1>
-        <p className="text-muted-foreground">Describe the problem you're facing</p>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">📢 Raise a New Issue</h1>
+          <p className="text-slate-400 mt-1">Report any hostel facility problems below.</p>
+        </div>
+
+        <Link href="/student">
+          <Button variant="outline" className="border-slate-600 text-white hover:bg-slate-800">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+          </Button>
+        </Link>
+      </div>
+
+      {/* Stats Section */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        <Card className="p-5 bg-slate-800/70 border-slate-700 text-center">
+          <p className="text-slate-400 text-sm">Total Issues</p>
+          <h2 className="text-3xl font-bold text-white mt-1">{stats.total}</h2>
+        </Card>
+        <Card className="p-5 bg-slate-800/70 border-slate-700 text-center">
+          <p className="text-slate-400 text-sm">Resolved</p>
+          <h2 className="text-3xl font-bold text-green-400 mt-1">{stats.resolved}</h2>
+        </Card>
+        <Card className="p-5 bg-slate-800/70 border-slate-700 text-center">
+          <p className="text-slate-400 text-sm">In Progress</p>
+          <h2 className="text-3xl font-bold text-yellow-400 mt-1">{stats.inProgress}</h2>
+        </Card>
+        <Card className="p-5 bg-slate-800/70 border-slate-700 text-center">
+          <p className="text-slate-400 text-sm">Pending</p>
+          <h2 className="text-3xl font-bold text-orange-400 mt-1">{stats.pending}</h2>
+        </Card>
       </div>
 
       {/* Form */}
-      <Card className="max-w-2xl border-2 p-8">
+      <Card className="p-8 bg-slate-900/80 border-slate-700">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Issue Title */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Issue Title</label>
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Issue Title</label>
             <input
               type="text"
-              placeholder="Brief title of the issue"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter issue title"
+              className="w-full px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
-          </div>
-
-          {/* Category */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Category</label>
-            <select
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
-              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {categories.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Facility */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Related Facility</label>
-            <select
-              value={formData.facilityId}
-              onChange={(e) => setFormData({ ...formData, facilityId: e.target.value })}
-              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              required
-            >
-              <option value="">Select a facility</option>
-              {facilities.map((fac) => (
-                <option key={fac.id} value={fac.id}>
-                  {fac.name}
-                </option>
-              ))}
-            </select>
           </div>
 
           {/* Description */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Description</label>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
             <textarea
-              placeholder="Provide detailed description of the issue"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={6}
-              className="w-full px-4 py-2 rounded-lg border-2 border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              required
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe your issue..."
+              rows={4}
+              className="w-full px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
             />
+          </div>
+
+          {/* Facility Dropdown */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Facility</label>
+            <select
+              value={facilityId}
+              onChange={(e) => setFacilityId(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg border border-slate-600 bg-slate-900 text-white focus:ring-2 focus:ring-cyan-500"
+            >
+              <option value="" disabled hidden>
+                Select Facility
+              </option>
+              {facilities.map((f) => (
+                <option key={f.id} value={f.name}>
+                  {f.name} {f.status === "active" ? "🟢" : "🟡"}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Submit Button */}
           <Button
             type="submit"
-            className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 py-6"
+            className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3"
             disabled={loading}
           >
-            {loading ? "Submitting..." : "Submit Issue"}
+            {loading ? "Submitting..." : <><PlusCircle className="w-5 h-5 mr-2" />Raise Issue</>}
           </Button>
         </form>
       </Card>

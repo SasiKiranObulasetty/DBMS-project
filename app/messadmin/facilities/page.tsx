@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, MapPin, CheckCircle, Loader2 } from "lucide-react";
 
 interface Facility {
@@ -15,24 +16,53 @@ interface Facility {
   status: string;
 }
 
-export default function ManageFacilitiesPage() {
+export default function MessFacilitiesPage() {
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
+  // ✅ Role Protection
+  useEffect(() => {
+    const userRaw = localStorage.getItem("user");
+    let user = null;
+
+    try {
+      user = userRaw ? JSON.parse(userRaw) : null;
+    } catch (err) {
+      console.error("❌ Error parsing user:", err);
+    }
+
+    if (
+      !user ||
+      !["messadmin", "superadmin"].includes(user.role?.toLowerCase())
+    ) {
+      console.warn("⚠️ Unauthorized access — redirecting to login...");
+      router.replace("/login");
+    }
+  }, [router]);
+
+  // ✅ Fetch only mess facility
   useEffect(() => {
     const fetchFacilities = async () => {
       try {
         const res = await fetch("/api/facilities");
         if (!res.ok) throw new Error("Failed to fetch facilities");
+
         const data = await res.json();
-        setFacilities(Array.isArray(data) ? data : []);
+        const allFacilities = Array.isArray(data) ? data : [];
+        const messFacility = allFacilities.filter(
+          (f) => f.category?.toLowerCase() === "mess"
+        );
+
+        setFacilities(messFacility);
       } catch (err) {
-        console.error("Error fetching facilities:", err);
+        console.error("Error fetching mess facilities:", err);
         setFacilities([]);
       } finally {
         setLoading(false);
       }
     };
+
     fetchFacilities();
   }, []);
 
@@ -51,7 +81,7 @@ export default function ManageFacilitiesPage() {
     <div className="flex-1 min-h-screen bg-slate-900 text-white p-8">
       {/* Header */}
       <div className="mb-8">
-        <Link href="/admin">
+        <Link href="/messadmin">
           <Button
             variant="outline"
             size="sm"
@@ -61,9 +91,9 @@ export default function ManageFacilitiesPage() {
             Back
           </Button>
         </Link>
-        <h1 className="text-3xl font-bold text-white">🏢 Manage Facilities</h1>
+        <h1 className="text-3xl font-bold text-white">🍽 Mess Facilities</h1>
         <p className="text-slate-400">
-          View and manage all hostel facilities available to students.
+          Manage the mess department facilities and ensure smooth meal service.
         </p>
       </div>
 
@@ -71,14 +101,14 @@ export default function ManageFacilitiesPage() {
       {loading && (
         <div className="flex justify-center items-center h-40">
           <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
-          <span className="ml-2 text-slate-400">Loading facilities...</span>
+          <span className="ml-2 text-slate-400">Loading mess facilities...</span>
         </div>
       )}
 
       {/* Empty State */}
       {!loading && facilities.length === 0 && (
         <Card className="p-10 text-center bg-slate-800/80 border border-slate-700 text-slate-400">
-          No facilities found.
+          No mess facilities found.
         </Card>
       )}
 
@@ -97,7 +127,7 @@ export default function ManageFacilitiesPage() {
                     facility.category || "others"
                   )} flex items-center justify-center shadow-md`}
                 >
-                  <span className="text-2xl">🏠</span>
+                  <span className="text-2xl">🍽️</span>
                 </div>
                 <span
                   className={`flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full ${
@@ -136,6 +166,7 @@ export default function ManageFacilitiesPage() {
                   size="sm"
                   variant="outline"
                   className="text-white border-slate-600 hover:bg-slate-700"
+                  onClick={() => alert("Edit feature coming soon!")}
                 >
                   Edit
                 </Button>

@@ -4,12 +4,8 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle, Search } from "lucide-react";
-
-interface Facility {
-  id: number;
-  name: string;
-}
 
 interface Issue {
   id: number;
@@ -22,84 +18,78 @@ interface Issue {
   room_number: string;
 }
 
-export default function ResolvedIssuesPage() {
+export default function MessResolvedIssuesPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [facilities, setFacilities] = useState<Facility[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterFacility, setFilterFacility] = useState("all");
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
+  // ✅ Role Protection
   useEffect(() => {
-    const fetchData = async () => {
+    const userRaw = localStorage.getItem("user");
+    let user = null;
+
+    try {
+      user = userRaw ? JSON.parse(userRaw) : null;
+    } catch (err) {
+      console.error("❌ Error parsing user:", err);
+    }
+
+    if (!user || !["messadmin", "superadmin"].includes(user.role?.toLowerCase())) {
+      console.warn("⚠️ Unauthorized access — redirecting to login...");
+      router.replace("/login");
+    }
+  }, [router]);
+
+  // ✅ Fetch only resolved mess issues
+  useEffect(() => {
+    const fetchIssues = async () => {
       try {
         setLoading(true);
+        const res = await fetch("/api/issues?category=mess");
+        if (!res.ok) throw new Error("Failed to fetch mess issues");
+        const data = await res.json();
 
-        const [issuesRes, facilitiesRes] = await Promise.all([
-          fetch("/api/issues"),
-          fetch("/api/facilities"),
-        ]);
-
-        if (!issuesRes.ok || !facilitiesRes.ok) {
-          throw new Error("Failed to fetch data");
-        }
-
-        const issuesJson = await issuesRes.json();
-        const facilitiesJson = await facilitiesRes.json();
-
-        // ✅ Normalize data shape — handles API returning array or object
-        const issuesData = Array.isArray(issuesJson)
-          ? issuesJson
-          : Array.isArray(issuesJson.issues)
-          ? issuesJson.issues
-          : Array.isArray(issuesJson.data)
-          ? issuesJson.data
+        // Normalize response
+        const issuesData = Array.isArray(data)
+          ? data
+          : Array.isArray(data.issues)
+          ? data.issues
           : [];
 
-        const facilitiesData = Array.isArray(facilitiesJson)
-          ? facilitiesJson
-          : Array.isArray(facilitiesJson.facilities)
-          ? facilitiesJson.facilities
-          : [];
-
-        const resolvedIssues = issuesData.filter(
-          (issue: Issue) =>
+        // Filter resolved mess issues
+        const resolvedMessIssues = issuesData.filter(
+          (issue) =>
+            issue.category?.toLowerCase() === "mess" &&
             issue.status?.toLowerCase() === "resolved"
         );
 
-        setIssues(resolvedIssues);
-        setFacilities(facilitiesData);
+        setIssues(resolvedMessIssues);
       } catch (err) {
-        console.error("Error fetching resolved issues:", err);
+        console.error("Error fetching resolved mess issues:", err);
         setIssues([]);
-        setFacilities([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchIssues();
   }, []);
 
-  // ✅ Filter + Search
+  // ✅ Search filter
   const filteredIssues = issues.filter((issue) => {
-    const matchesSearch =
+    return (
       issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       issue.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      issue.category.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesFacility =
-      filterFacility === "all" ||
-      issue.category.toLowerCase().replace("_", " ") ===
-        filterFacility.toLowerCase();
-
-    return matchesSearch && matchesFacility;
+      issue.room_number.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   });
 
   return (
     <div className="flex-1 min-h-screen bg-slate-900 text-white p-8">
       {/* Header */}
       <div className="mb-8">
-        <Link href="/admin">
+        <Link href="/messadmin">
           <Button
             variant="outline"
             size="sm"
@@ -109,38 +99,25 @@ export default function ResolvedIssuesPage() {
             Back
           </Button>
         </Link>
-        <h1 className="text-3xl font-bold text-white">✅ Resolved Issues</h1>
-        <p className="text-slate-400">View all completed issue resolutions</p>
+        <h1 className="text-3xl font-bold text-white">🍽️ Resolved Mess Issues</h1>
+        <p className="text-slate-400">
+          View all completed issue resolutions related to the mess department.
+        </p>
       </div>
 
-      {/* Filters */}
+      {/* Search Bar */}
       <Card className="border border-slate-700 bg-slate-800/80 p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="text"
-              placeholder="Search by title, student, or category..."
+              placeholder="Search by title, student, or room..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
             />
           </div>
-
-          {/* Facility Filter */}
-          <select
-            value={filterFacility}
-            onChange={(e) => setFilterFacility(e.target.value)}
-            className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 text-white focus:ring-2 focus:ring-cyan-500"
-          >
-            <option value="all">All Facilities</option>
-            {facilities.map((f) => (
-              <option key={f.id} value={f.name}>
-                {f.name}
-              </option>
-            ))}
-          </select>
         </div>
       </Card>
 
@@ -148,20 +125,17 @@ export default function ResolvedIssuesPage() {
       <Card className="border border-slate-700 bg-slate-800/80 overflow-hidden">
         {loading ? (
           <div className="text-center py-12 text-slate-400">
-            Loading resolved issues...
+            Loading resolved mess issues...
           </div>
         ) : filteredIssues.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
-            No resolved issues found.
+            No resolved mess issues found.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead className="bg-slate-700/70 border-b border-slate-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-300">
-                    Facility
-                  </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-slate-300">
                     Title
                   </th>
@@ -185,9 +159,6 @@ export default function ResolvedIssuesPage() {
                     key={issue.id}
                     className="border-b border-slate-700 hover:bg-slate-700/50 transition"
                   >
-                    <td className="px-6 py-4 capitalize text-slate-200">
-                      {issue.category.replace("_", " ")}
-                    </td>
                     <td className="px-6 py-4">
                       <div>
                         <p className="font-semibold text-white">{issue.title}</p>

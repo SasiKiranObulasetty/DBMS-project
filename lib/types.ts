@@ -22,7 +22,7 @@ export interface Facility {
   name: string
   category: "mess" | "internet" | "cleaning" | "entry-exit" | "medical"
   location: string
-  status: "active" | "maintenance"
+  status: "active" | "maintenance" | "faulty"
   description: string
 }
 

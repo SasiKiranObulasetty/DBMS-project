@@ -138,6 +138,8 @@ export function createIssue(issue: Omit<Issue, "id" | "createdAt">): Issue {
   return newIssue
 }
 
+
+
 export function updateIssue(id: string, updates: Partial<Issue>): Issue | null {
   if (typeof window === "undefined") return null
 
@@ -149,6 +151,15 @@ export function updateIssue(id: string, updates: Partial<Issue>): Issue | null {
   issues[index] = { ...issues[index], ...updates }
   localStorage.setItem(ISSUES_KEY, JSON.stringify(issues))
   return issues[index]
+}
+
+export function saveIssue(issue: Issue) {
+  if (typeof window === "undefined") return
+
+  initializeStorage()
+  const existing = JSON.parse(localStorage.getItem("hostel_issues") || "[]")
+  existing.unshift(issue)
+  localStorage.setItem("hostel_issues", JSON.stringify(existing))
 }
 
 export function getStudentIssues(studentId: string): Issue[] {
